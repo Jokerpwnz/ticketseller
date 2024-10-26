@@ -1,0 +1,113 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_app
+    restart: unless-stopped
+#    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    ports:
+      - "85:80"
+    depends_on:
+      - mysql
+      - mongo
+      - redis_service
+      - opensearch_service
+      - rabbitmq
+    networks:
+      - app-network
+    expose:
+        - 9000
+
+  nginx:
+      image: nginx:alpine
+      container_name: laravel-nginx
+      restart: unless-stopped
+      ports:
+          - "80:80"
+      volumes:
+          - ./:/var/www
+          - ./dockerfiles/nginx:/etc/nginx/conf.d/
+      networks:
+          - app-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: laravel
+      MYSQL_USER: laravel
+      MYSQL_PASSWORD: secret
+    ports:
+      - 3305:3306
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+
+  mongo:
+    image: mongo:6
+    container_name: mongo
+    restart: unless-stopped
+    ports:
+      - "27015:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app-network
+
+  redis_service:
+    image: redis:7
+    container_name: redis_service
+    restart: unless-stopped
+    ports:
+      - "6375:6325"
+    networks:
+        - app-network
+
+  opensearch_service:
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch_service
+    ports:
+      - 9205:9200
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    restart: unless-stopped
+    environment:
+      - cluster.name=docker-cluster
+      - "OPENSEARCH_JAVA_OPTS=-Xms128m -Xmx128m -Xlog:disable -Xlog:all=warning:stderr:utctime,level,tags -Xlog:gc=debug:stderr:utctime"
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+        - app-network
+
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5675:5672"
+      - "15675:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+        - app-network
+
+networks:
+    app-network:
+        driver: bridge
+
+volumes:
+  mysql_data:
+  mongo_data:
+  opensearch_data:
